@@ -1,0 +1,74 @@
+#include "kernel/types.h"
+#include "kernel/stat.h"
+#include "user/user.h"
+
+#define re 0
+#define wr 1
+
+int main(){
+    char p[2];
+    char p2[2];
+    char p3[2];
+    char p5[2];
+    pipe(p);
+    pipe(p2);
+    pipe(p3);
+    pipe(p5);
+
+    if(fork()==0){
+        close(p[re]);
+        for(int i = 2; i <= 35; i++){
+            write(p[wr], i, sizeof(i));
+        }
+        close(p[wr]);
+    }
+    int num;
+    if(fork()==0){
+        close(p[wr]);
+        read(p[re], num, sizeof(num));
+        fprintf(1, "%d", num);
+        close(p[re]);
+
+        close(p2[re]);
+        int t;
+        while(read(p[re], t, sizeof(t))){
+            if(t / num != 0){
+                write(p2[wr], t, sizeof(t));
+            }
+        }
+        close(p2[wr]);
+    }
+    int numm;
+    if(fork()==0){
+        close(p2[wr]);
+        read(p2[re], numm, sizeof(numm));
+        fprintf(1, "%d", numm);
+        close(p2[re]);
+
+        close(p3[re]);
+        int tt;
+        while(read(p3[re], tt, sizeof(tt))){
+            if(tt / numm != 0){
+                write(p3[wr], tt, sizeof(tt));
+            }
+        }
+        close(p3[wr]);
+    }
+    int nummm;
+    if(fork()==0){
+        close(p3[wr]);
+        read(p3[re], nummm, sizeof(nummm));
+        fprintf(1, "%d", nummm);
+        close(p3[re]);
+
+        close(p5[re]);
+        int ttt;
+        while(read(p5[re], ttt, sizeof(ttt))){
+            if(ttt / nummm != 0){
+                write(p5[wr], ttt, sizeof(ttt));
+            }
+        }
+        close(p5[wr]);
+
+    }
+}
