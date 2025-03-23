@@ -29,8 +29,7 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   for(p = proc; p < &proc[NPROC]; p++) {
-      initlock(&p->lock, "proc");
-
+      initlock(&pid_lock, "nextpid");
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
@@ -106,7 +105,7 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
-
+  
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
@@ -121,6 +120,22 @@ found:
     return 0;
   }
 
+  // An empty kernel page table.
+  p->kernelpt = proc_kpt_init();
+  if(p->kernelpt == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  //initialize process kernel pagetable
+  char *pa = kalloc();
+  if(pa == 0)
+       panic("kalloc");
+  uint64 va = KSTACK((int) (p - proc));
+  proc_kvmmap(p->kernelpt, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
+  
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -141,7 +156,16 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->kernelpt)
+  {
+    // free the kernel stack int the RAM
+    uvmunmap(p->kernelpt, p->kstack, 1, 1);
+    p->kstack = 0;
+
+    proc_freekernelpt(p->kernelpt);
+  }
   p->pagetable = 0;
+  p->kernelpt = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -195,6 +219,15 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmfree(pagetable, sz);
 }
 
+
+// Free a process's kernel page table, but don't free the
+// physical memory it refers to.
+void
+proc_freekernelpt(pagetable_t kernelpt)
+{
+  proc_kvmfree(kernelpt);
+}
+
 // a user program that calls exec("/init")
 // od -t xC initcode
 uchar initcode[] = {
@@ -221,6 +254,7 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+   u2kvmcopy(p->pagetable, p->kernelpt, 0, PGSIZE);
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -243,9 +277,18 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    // 加上PLIC限制
+    if (PGROUNDUP(sz + n) >= PLIC){
+      return -1;
+    }
+
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+
+    // 复制一份到内核页表
+    u2kvmcopy(p->pagetable, p->kernelpt, sz - n, sz);
+
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
@@ -274,6 +317,8 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  u2kvmcopy(np->pagetable, np->kernelpt, 0, np->sz);
 
   np->parent = p;
 
@@ -473,11 +518,21 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        
+        //w_satp(MAKE_SATP(p->kernelpt));
+        //sfence_vma();
+        proc_inithart(p->kernelpt);
+        
+        // switch context
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
+      
+        //w_satp(MAKE_SATP(kernel_pagetable));
+        //sfence_vma();
+        kvminithart();
 
         found = 1;
       }

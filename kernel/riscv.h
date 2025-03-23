@@ -314,6 +314,7 @@ r_ra()
 // flush the TLB.
 static inline void
 sfence_vma()
+
 {
   // the zero, zero means flush all TLB entries.
   asm volatile("sfence.vma zero, zero");
