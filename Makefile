@@ -175,7 +175,9 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-
+    $U/_sigalarm\
+    $U/_sigreturn\
+    $U/_alarmtest\
 
 
 
