@@ -68,17 +68,46 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else if(r_scause() == 13 || r_scause() == 15) {
-    uint64 fault_va = r_stval();
-    char* pa;                    
-    if(PGROUNDUP(p->trapframe->sp) - 1 < fault_va && fault_va < p->sz && (pa = kalloc()) != 0) {
-        memset(pa, 0, PGSIZE);
-        if(mappages(p->pagetable, PGROUNDDOWN(fault_va), PGSIZE, (uint64)pa, PTE_R | PTE_W | PTE_X | PTE_U) != 0) {
-          kfree(pa);
-          p->killed = 1;
-        }
-    } else {
-      p->killed = 1;
-    }
+        uint64 fault_va = r_stval();
+        char* pa;                    
+      
+        if(PGROUNDUP(p->trapframe->sp) - 1 < fault_va && fault_va < p->sz && fault_va < MAXVA && (pa = kalloc()) != 0) {
+            memset(pa, 0, PGSIZE);
+            if(mappages(p->pagetable, PGROUNDDOWN(fault_va), PGSIZE, (uint64)pa, PTE_R | PTE_W | PTE_X | PTE_U) != 0) {
+              kfree(pa);
+              p->killed = 1;
+            }
+        } else {
+        
+            if(fault_va >= MAXVA || fault_va < 0){
+                printf("usertrap: invalid address %p\n", fault_va);
+                p->killed = 1;
+            } else{
+                pte_t *pte = walk(p->pagetable, PGROUNDDOWN(fault_va), 0);
+                if (pte == 0 || (*pte & PTE_V) == 0) {
+                    p->killed = 1;  // 页面表项不存在，非法访问
+                }else{
+                    // 已映射，检查权限
+                    if (r_scause() == 15 && (*pte & PTE_W) == 0) {
+                        // 尝试写入只读页面
+                        printf("usertrap: attempt to write read-only page at %p\n", fault_va);
+                        p->killed = 1;
+                    } else if (r_scause() == 13 && (*pte & PTE_R) == 0) {
+                        // 尝试读取不可读页面
+                        printf("usertrap: attempt to read non-readable page at %p\n", fault_va);
+                        p->killed = 1;
+                    } else if ((*pte & PTE_U) == 0) {
+                        // 用户态访问内核页面
+                        printf("usertrap: user access to kernel page at %p\n", fault_va);
+                        p->killed = 1;
+                    } else {
+                        // 其他未知原因
+                        printf("usertrap: unknown page fault at %p\n", fault_va);
+                        p->killed = 1;
+                    }
+                }
+            }
+       }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
