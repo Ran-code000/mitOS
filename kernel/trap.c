@@ -46,10 +46,10 @@ usertrap(void)
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
-  
+
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
+
   if(r_scause() == 8){
     // system call
 
@@ -69,8 +69,8 @@ usertrap(void)
     // ok
   } else if(r_scause() == 13 || r_scause() == 15) {
         uint64 fault_va = r_stval();
-        char* pa;                    
-      
+        char* pa;
+
         if(fault_va >= MAXVA || fault_va < 0){
             printf("usertrap: invalid address %p\n", fault_va);
             p->killed = 1;
@@ -83,25 +83,25 @@ usertrap(void)
                         kfree(pa);
                         p->killed = 1;
                     }
-                } else{ 
-                    p->killed = 1;  // 页面表项不存在，非法访问
+                } else{
+                    p->killed = 1;  // The page table entry does not exist or is invalid, illegal access
                 }
             }else{
-                // 已映射，检查权限
+                // Already mapped, check permissions
                 if (r_scause() == 15 && (*pte & PTE_W) == 0) {
-                    // 尝试写入只读页面
+                    // Attempting to write to a read-only page
                     printf("usertrap: attempt to write read-only page at %p\n", fault_va);
                     p->killed = 1;
                 } else if (r_scause() == 13 && (*pte & PTE_R) == 0) {
-                    // 尝试读取不可读页面
+                    // Attempting to read a non-readable page
                     printf("usertrap: attempt to read non-readable page at %p\n", fault_va);
                     p->killed = 1;
                 } else if ((*pte & PTE_U) == 0) {
-                    // 用户态访问内核页面
+                    // User mode access to kernel page
                     printf("usertrap: user access to kernel page at %p\n", fault_va);
                     p->killed = 1;
                 } else {
-                    // 其他未知原因
+                    // Other unknown reason
                     printf("usertrap: unknown page fault at %p\n", fault_va);
                     p->killed = 1;
                 }
