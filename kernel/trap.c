@@ -67,12 +67,46 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+<<<<<<< Updated upstream
   } else if(r_scause() == 13 || r_scause() == 15) {
       uint64 fault_va = r_stval();  // 获取出错的虚拟地址
       if(fault_va >= p->sz
         || cowpage(p->pagetable, fault_va) != 0
         || cowalloc(p->pagetable, PGROUNDDOWN(fault_va)) == 0)
         p->killed = 1;
+=======
+  } else if(r_scause() == 13 || r_scause() == 15){
+      uint64 fault_va = r_stval();
+      uint64 va = PGROUNDDOWN(fault_va);
+      if(fault_va >= p->sz || fault_va >= MAXVA || (fault_va < PGROUNDDOWN(p->trapframe->sp) && fault_va >= (PGROUNDDOWN(p->trapframe->sp) - PGSIZE))){
+          p->killed = 1;
+      } else{
+          pte_t *oldpte = walk(p->pagetable, va, 0);
+          uint64 oldpa = PTE2PA((uint64)*oldpte);
+          uint64 flags = PTE_FLAGS(*oldpte);
+          if(oldpte == 0){
+              p->killed = 1;
+          } else if(*oldpte & PTE_F){
+              char* newpa = kalloc();
+              if(newpa == 0){
+                  p->killed = 1;
+              } else{
+                  memmove(newpa, (char*)oldpa, PGSIZE);
+                               
+                  *oldpte &= ~PTE_V;
+
+                  if(mappages(p->pagetable, va, PGSIZE, (uint64)newpa, (flags | PTE_W) & ~PTE_F) != 0){
+                      kfree(newpa);
+                      *oldpte |= PTE_V;
+                      p->killed = 1;
+                  } else{
+                      kfree((char*)PGROUNDDOWN(oldpa));
+                      *oldpte |= PTE_V;
+                  }
+              }
+          }
+      }
+>>>>>>> Stashed changes
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

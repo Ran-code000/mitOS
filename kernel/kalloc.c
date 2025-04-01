@@ -9,19 +9,8 @@
 #include "defs.h"
 #include "kalloc.h"
 
-void freerange(void *pa_start, void *pa_end);
-
-extern char end[]; // first address after kernel.
-                   // defined by kernel.ld.
-
-struct run {
-  struct run *next;
-};
-
-struct {
-  struct spinlock lock;
-  struct run *freelist;
-} kmem;
+extern struct ref_count ref;
+struct kmem kmem;
 
 void
 kinit()
@@ -36,8 +25,12 @@ freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
+<<<<<<< Updated upstream
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
     // 在kfree中将会对cnt[]减1，这里要先设为1，否则就会减成负数
+=======
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
+>>>>>>> Stashed changes
     ref.cnt[(uint64)p / PGSIZE] = 1;
     kfree(p);
   }
@@ -61,6 +54,7 @@ kfree(void *pa)
   if(--ref.cnt[(uint64)pa / PGSIZE] == 0) {
     release(&ref.lock);
 
+<<<<<<< Updated upstream
     r = (struct run*)pa;
 
     // Fill with junk to catch dangling refs.
@@ -72,6 +66,23 @@ kfree(void *pa)
     release(&kmem.lock);
   } else {
     release(&ref.lock);
+=======
+
+  acquire(&ref.lock);
+  --ref.cnt[(uint64)pa / PGSIZE];
+  release(&ref.lock);
+  if(ref.cnt[(uint64)pa / PGSIZE] == 0) {
+      
+      // Fill with junk to catch dangling refs.
+      memset(pa, 1, PGSIZE);
+
+      r = (struct run*)pa;
+   
+      acquire(&kmem.lock);
+      r->next = kmem.freelist;
+      kmem.freelist = r;
+      release(&kmem.lock);
+>>>>>>> Stashed changes
   }
 }
 
@@ -85,10 +96,17 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
+<<<<<<< Updated upstream
   if(r) {
     kmem.freelist = r->next;
     acquire(&ref.lock);
     ref.cnt[(uint64)r / PGSIZE] = 1;  // 将引用计数初始化为1
+=======
+  if(r){
+    kmem.freelist = r->next;
+    acquire(&ref.lock);
+    ref.cnt[(uint64)r / PGSIZE] = 1;
+>>>>>>> Stashed changes
     release(&ref.lock);
   }
   release(&kmem.lock);

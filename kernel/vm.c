@@ -6,6 +6,10 @@
 #include "defs.h"
 #include "fs.h"
 #include "kalloc.h"
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 /*
  * the kernel's page table.
  */
@@ -15,7 +19,12 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+<<<<<<< Updated upstream
 struct ref_stru ref;
+=======
+struct ref_count ref;
+
+>>>>>>> Stashed changes
 /*
  * create a direct-map page table for the kernel.
  */
@@ -309,15 +318,20 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  pte_t *pte;
+  pte_t *oldpte;
   uint64 pa, i;
   uint flags;
+<<<<<<< Updated upstream
+=======
+  //char *mem;
+>>>>>>> Stashed changes
 
   for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walk(old, i, 0)) == 0)
+    if((oldpte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
+    if((*oldpte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+<<<<<<< Updated upstream
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
 
@@ -336,6 +350,38 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     kaddrefcnt((char*)pa);
   }
   return 0;
+=======
+    pa = PTE2PA(*oldpte);
+    flags = PTE_FLAGS(*oldpte);
+    
+    *oldpte = (*oldpte & ~PTE_W) | PTE_F;
+    if(mappages(new, i, PGSIZE, pa, (flags & ~PTE_W) | PTE_F) != 0){
+        uvmunmap(new, 0, i / PGSIZE, 1);
+        return -1;
+    }
+
+    *oldpte = (*oldpte & ~PTE_W) | PTE_F;
+    acquire(&ref.lock);
+    ++ref.cnt[(uint64)pa / PGSIZE];
+    release(&ref.lock);
+
+    /*
+    if((mem = kalloc()) == 0)
+      goto err;
+    memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+      kfree(mem);
+      goto err;
+    }
+    */
+  }
+  return 0;
+ /*
+ err:
+  uvmunmap(new, 0, i / PGSIZE, 1);
+  return -1;
+  */
+>>>>>>> Stashed changes
 }
 
 // mark a PTE invalid for user access.
@@ -357,11 +403,14 @@ uvmclear(pagetable_t pagetable, uint64 va)
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
-  uint64 n, va0, pa0;
-
+    uint64 n, va0, pa0;
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    if(dstva >= MAXVA)
+        return -1;
+
     pa0 = walkaddr(pagetable, va0);
+<<<<<<< Updated upstream
 
     // 处理COW页面的情况
     if(cowpage(pagetable, va0) == 0) {
@@ -369,8 +418,32 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         pa0 = (uint64)cowalloc(pagetable, va0);
     }
 
+=======
+    pte_t *pte = walk(pagetable, va0, 0);
+>>>>>>> Stashed changes
     if(pa0 == 0)
-      return -1;
+        return -1;
+
+    uint64 flags = PTE_FLAGS((uint64)*pte);
+    if(*pte & PTE_F){
+        char* newpa = kalloc();
+        if(newpa == 0){
+            return -1;
+        }
+        memmove(newpa, (char*)pa0, PGSIZE);
+
+        *pte &= ~PTE_V;
+        if(mappages(pagetable, va0, PGSIZE, (uint64)newpa, (flags | PTE_W ) & ~PTE_F) != 0){
+            kfree(newpa);
+            *pte |= PTE_V;
+            return -1;
+        }
+        *pte |= PTE_V;
+        kfree((char*)PGROUNDDOWN(pa0));
+        pa0 = (uint64)newpa; 
+    }
+    if(pa0 == 0)
+        return -1;
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
