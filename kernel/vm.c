@@ -15,7 +15,6 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-struct ref_count ref;
 
 /*
  * create a direct-map page table for the kernel.
@@ -322,6 +321,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*oldpte);
     flags = PTE_FLAGS(*oldpte);
+
+    //*oldpte = (*oldpte & ~PTE_W) | PTE_F;
 
     if(mappages(new, i, PGSIZE, pa, (flags & ~PTE_W) | PTE_F) != 0){
         uvmunmap(new, 0, i / PGSIZE, 1);

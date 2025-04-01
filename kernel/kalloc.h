@@ -16,10 +16,11 @@ struct ref_count{
   struct spinlock lock;
   int cnt[PHYSTOP / PGSIZE];
 };
+extern struct ref_count ref; // 声明全局变量
 
 struct kmem {
   struct spinlock lock;
   struct run *freelist;
 };
-
+extern struct kmem kmem; // 声明全局变量
 # endif

@@ -9,7 +9,7 @@
 #include "defs.h"
 #include "kalloc.h"
 
-extern struct ref_count ref;
+struct ref_count ref;
 struct kmem kmem;
 
 void
@@ -26,9 +26,9 @@ freerange(void *pa_start, void *pa_end)
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
-    acquire(&ref.lock);
-    ref.cnt[(uint64)p / PGSIZE] = 1;
-    release(&ref.lock);
+    //acquire(&ref.lock);
+    //ref.cnt[(uint64)p / PGSIZE] = 1;
+    //release(&ref.lock);
     kfree(p);
   }
 }
@@ -48,7 +48,7 @@ kfree(void *pa)
   // 只有当引用计数为0了才回收空间
   // 否则只是将引用计数减1
   acquire(&ref.lock);
-  if(--ref.cnt[(uint64)pa / PGSIZE] == 0) {
+  if(--ref.cnt[(uint64)pa / PGSIZE] <= 0) {
       release(&ref.lock);  
       // Fill with junk to catch dangling refs.
       memset(pa, 1, PGSIZE);
