@@ -88,12 +88,12 @@ usertrap(void)
                   *oldpte &= ~PTE_V;
 
                   if(mappages(p->pagetable, va, PGSIZE, (uint64)newpa, (flags | PTE_W) & ~PTE_F) != 0){
-                      *oldpte |= PTE_V;
                       kfree(newpa);
+                      *oldpte |= PTE_V;
                       p->killed = 1;
                   } else{
-                      *oldpte |= PTE_V;
                       kfree((char*)PGROUNDDOWN(oldpa));
+                      //*oldpte |= PTE_V;
                   }
               }
           }

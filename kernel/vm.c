@@ -391,12 +391,12 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
         *pte &= ~PTE_V;
         if(mappages(pagetable, va0, PGSIZE, (uint64)newpa, (flags | PTE_W ) & ~PTE_F) != 0){
-            *pte |= PTE_V;
             kfree(newpa);
+            *pte |= PTE_V;
             return -1;
         }
-        *pte |= PTE_V;
         kfree((char*)PGROUNDDOWN(pa0));
+        //*pte |= PTE_V;
         pa0 = (uint64)newpa; 
     }
     if(pa0 == 0)
