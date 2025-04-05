@@ -1,1 +1,10 @@
-Hash table is a shared global variable. Multithreading can cause thread safety problems when writing at the same time.
+事件序列：
+1. 线程 1 调用 put(key1)，计算 i = key1 % NBUCKET，分配 e1，准备插入。
+2. 线程 2 调用 put(key2)，计算 i = key2 % NBUCKET（与线程 1 相同），分配 e2。
+3. 线程 1 设置 e1->next = table[i]。
+4. 线程 2 设置 e2->next = table[i]。
+5. 线程 2 更新 table[i] = e2。
+6. 线程 1 更新 table[i] = e1，覆盖线程 2 的 e2。
+
+解释：
+当两个线程同时操作同一桶时，未加锁的 put() 会导致链表头被覆盖。线程 2 的插入被线程 1 覆盖，导致键丢失。由于键是随机的，两个线程都可能遇到这种竞争，因此都报告丢失键。
